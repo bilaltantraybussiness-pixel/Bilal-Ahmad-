@@ -1,0 +1,58 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'bilaltantraypersonal@gmail.com' ||
+        request.auth.token.email == 'admin@rozgarkashmir.in' ||
+        request.auth.token.phone_number == '+919906000000' ||
+        request.auth.token.phone_number == '+919419099999'
+      );
+    }
+
+    // Public marketplace product images & food photos
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+
+    match /restaurants/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+
+    match /properties/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAuthenticated() && request.resource.size < 10 * 1024 * 1024 && request.resource.contentType.matches('image/.*');
+    }
+
+    // User profile avatars
+    match /avatars/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isOwner(userId) || isAdmin();
+    }
+
+    // Verification ID documents (Private: Admin & Submitting User Only)
+    match /verifications/{userId}/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Audio voice notes in chat
+    match /audio_messages/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Default deny-all
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

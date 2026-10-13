@@ -1,0 +1,244 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'bilaltantraypersonal@gmail.com' ||
+        request.auth.token.email == 'admin@rozgarkashmir.in' ||
+        request.auth.token.phone_number == '+919906000000' ||
+        request.auth.token.phone_number == '+919419099999'
+      );
+    }
+
+    // --- User Accounts (Private sensitive info: phone, role, verified) ---
+    match /users/{userId} {
+      // Owner or Admin can read full private record
+      allow read: if isOwner(userId) || isAdmin();
+      // Only owner can create/update own profile; cannot elevate own admin role
+      allow create: if isOwner(userId);
+      allow update: if (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'isBanned', 'isVerified'])) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // --- User Public / Shared Profiles ---
+    match /user_profiles/{userId} {
+      // Authenticated users can read public business profiles (workers/artisans/employers)
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // --- Private Delivery Addresses (Zero-leakage) ---
+    match /delivery_addresses/{addressId} {
+      allow read, update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // --- Worker Profiles ---
+    match /workers/{workerId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // --- Job Listings ---
+    match /jobs/{jobId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.employerUserId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.employerUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Job Applications ---
+    match /job_applications/{applicationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.applicantUserId == request.auth.uid ||
+        resource.data.employerUserId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.applicantUserId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.employerUserId == request.auth.uid ||
+        resource.data.applicantUserId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Marketplace Products ---
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.sellerUserId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.sellerUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Artisan / Merchant Shops ---
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.ownerUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Property Listings (Rent / Sale / Student) ---
+    match /property_listings/{propId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.ownerUserId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.ownerUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Restaurants & Food Kitchens ---
+    match /restaurants/{restId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.ownerUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Food Menu Items ---
+    match /food_menu_items/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated();
+    }
+
+    // --- Orders (Marketplace & Food Delivery) ---
+    match /orders/{orderId} {
+      // Customer, Seller/Supplier, or Admin only
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.supplierUserId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.customerId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.supplierUserId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Reseller Listings ---
+    match /reseller_listings/{listingId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.resellerUserId == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.resellerUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Direct Conversations & Messages ---
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.user1Id == request.auth.uid ||
+        resource.data.user2Id == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.user1Id == request.auth.uid ||
+        request.resource.data.user2Id == request.auth.uid
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.user1Id == request.auth.uid ||
+        resource.data.user2Id == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.receiverId == request.auth.uid || isAdmin());
+    }
+
+    // --- User Notifications ---
+    match /notifications/{notifId} {
+      allow read, update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // --- Financial Ledger & Payout Settlement (Strictly Admin & Involved Seller) ---
+    match /central_ledger/{entryId} {
+      allow read: if isAuthenticated() && (
+        resource.data.supplierUserId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+    }
+
+    match /payout_requests/{payoutId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Blue Badge Verifications (₹49) ---
+    match /verification_requests/{reqId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Reviews & Ratings ---
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.authorUserId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        resource.data.authorUserId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- Reports & Moderation Flags ---
+    match /reports/{reportId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.reporterUserId == request.auth.uid);
+      allow create: if isAuthenticated() && request.resource.data.reporterUserId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Platform Settings & Governance CMS ---
+    match /platform_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /legal_policies/{policyId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Kashmiri Literature Contributions ---
+    match /kashmiri_contributions/{contribId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.authorUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Admin Audit Telemetry ---
+    match /admin_audit_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Default deny-all fallback
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "entities": {
+    "User": {
+      "path": "/users/{userId}",
+      "fields": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "district": { "type": "string" },
+        "roles": { "type": "string" },
+        "createdAt": { "type": "number" }
+      }
+    },
+    "UserProfile": {
+      "path": "/user_profiles/{userId}",
+      "fields": {
+        "userId": { "type": "string" },
+        "userRole": { "type": "string" },
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "district": { "type": "string" },
+        "area": { "type": "string" },
+        "bio": { "type": "string" },
+        "profession": { "type": "string" },
+        "skills": { "type": "array" },
+        "skillProficiencies": { "type": "map" },
+        "serviceHistory": { "type": "array" },
+        "businessOrEstateName": { "type": "string" },
+        "lastSyncedAt": { "type": "number" }
+      }
+    }
+  }
+}
